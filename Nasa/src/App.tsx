@@ -13,12 +13,12 @@ function App() {
   const [stations, setStations] = useState<AirQualityStation[]>(airQualityStations);
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  const [epaApiKey, setEpaApiKey] = useState<string>('');
+  
 
   const loadRealTimeData = async () => {
     setIsLoading(true);
     try {
-      const realTimeStations = await fetchRealTimeStations(epaApiKey || undefined);
+      const realTimeStations = await fetchRealTimeStations();
       setStations(realTimeStations.length > 0 ? realTimeStations : airQualityStations);
       setLastUpdated(new Date());
     } catch (error) {
@@ -32,7 +32,7 @@ function App() {
     loadRealTimeData();
     const interval = setInterval(loadRealTimeData, 300000);
     return () => clearInterval(interval);
-  }, [epaApiKey]);
+  }, []);
 
   const handleStationClick = (station: AirQualityStation) => {
     setSelectedStation(station);
@@ -70,13 +70,6 @@ function App() {
             </div>
 
             <div className="flex items-center gap-2">
-              <input
-                type="password"
-                placeholder="EPA API Key"
-                value={epaApiKey}
-                onChange={(e) => setEpaApiKey(e.target.value)}
-                className="px-2 py-1 text-xs border rounded w-32"
-              />
               <button
                 onClick={loadRealTimeData}
                 disabled={isLoading}
@@ -115,7 +108,7 @@ function App() {
             <div className="flex items-center gap-3 text-xs">
               <span className="flex items-center gap-1"><div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>OpenAQ</span>
               <span className="flex items-center gap-1"><div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>TolNet</span>
-              <span className="flex items-center gap-1"><div className={`w-1.5 h-1.5 rounded-full ${epaApiKey ? 'bg-red-500' : 'bg-gray-400'}`}></div>EPA</span>
+              <span className="flex items-center gap-1"><div className="w-1.5 h-1.5 bg-gray-400 rounded-full"></div>EPA (optional)</span>
             </div>
           </div>
         </div>

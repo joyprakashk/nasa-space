@@ -36,7 +36,7 @@ export interface TolNetData {
 class APIService {
   private readonly OPENAQ_BASE = 'https://api.openaq.org/v2';
   private readonly EPA_BASE = 'https://www.airnowapi.org/aq';
-  private readonly TOLNET_BASE = 'https://avdc.gsfc.nasa.gov/pub/data/satellite/Aura/OMI';
+  // NOTE: TolNet data is simulated in fetchTolNetData; no base URL required here.
 
   async fetchOpenAQData(country = 'US', limit = 100): Promise<OpenAQMeasurement[]> {
     try {
@@ -52,6 +52,48 @@ class APIService {
       return data.results || [];
     } catch (error) {
       console.error('OpenAQ API error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch a global snapshot from OpenAQ (/latest) and flatten measurements.
+   * This endpoint does not require an API key.
+   */
+  async fetchGlobalOpenAQ(limit = 1000): Promise<OpenAQMeasurement[]> {
+    try {
+      const params = `limit=${limit}&order_by=lastUpdated&sort=desc&parameter=pm25,pm10,o3,no2,so2,co`;
+      const response = await fetch(`${this.OPENAQ_BASE}/latest?${params}`);
+
+      if (!response.ok) {
+        throw new Error(`OpenAQ global API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const results = data.results || [];
+
+      // Flatten the /latest results: each result has a measurements[] array
+      const flattened: OpenAQMeasurement[] = [];
+      for (const r of results) {
+        if (!r || !r.measurements) continue;
+        for (const m of r.measurements) {
+          flattened.push({
+            locationId: r.id || 0,
+            location: r.location || m.parameter || 'Unknown',
+            parameter: m.parameter,
+            value: m.value,
+            unit: m.unit || m?.unit || '',
+            country: r.country || 'US',
+            city: r.city || '',
+            coordinates: r.coordinates || { latitude: 0, longitude: 0 },
+            date: { utc: m.lastUpdated || new Date().toISOString(), local: m.lastUpdated || new Date().toISOString() }
+          });
+        }
+      }
+
+      return flattened;
+    } catch (error) {
+      console.error('OpenAQ global API error:', error);
       return [];
     }
   }

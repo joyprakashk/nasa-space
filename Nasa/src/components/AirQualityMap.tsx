@@ -4,7 +4,9 @@ import 'leaflet/dist/leaflet.css';
 import { AirQualityStation } from '../types/airQuality';
 import { getAQITextColor } from '../types/airQuality';
 import { getAQIHex, getAQIOpacity, getColorForPercent } from '../types/airQuality';
-import { stateAQIData } from '../data/airQualityData';
+import { stateAQIData, computeRegionSummaries, RegionSummary } from '../data/airQualityData';
+import RegionDetailsPanel from './RegionDetailsPanel';
+import { useMemo } from 'react';
 
 interface AirQualityMapProps {
   stations: AirQualityStation[];
@@ -134,7 +136,7 @@ const AirQualityMap = ({ stations, onStationClick }: AirQualityMapProps) => {
 
     // Add state markers if enabled
     if (showStates) {
-      stateAQIData.forEach(state => {
+  stateAQIData.forEach(state => {
         const stateIcon = L.divIcon({
           className: 'state-marker',
           html: `<div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;background:${getAQIHex(state.aqi)};color:#fff;font-weight:600;font-size:11px;box-shadow:0 2px 4px rgba(0,0,0,0.1);border:2px solid white;">${state.aqi}</div>`,
@@ -142,7 +144,7 @@ const AirQualityMap = ({ stations, onStationClick }: AirQualityMapProps) => {
           iconAnchor: [16, 16],
         });
 
-        const stateMarker = L.marker(state.coords, { icon: stateIcon })
+        const stateMarker = L.marker(state.coords as [number, number], { icon: stateIcon })
           .addTo(map)
           .bindPopup(`
             <div style="min-width:150px;padding:6px;font-family:Inter,Arial,sans-serif;">
@@ -169,6 +171,15 @@ const AirQualityMap = ({ stations, onStationClick }: AirQualityMapProps) => {
       delete (window as any).selectStation;
     };
   }, [stations, selectedMetric, onStationClick, showOverlays, showStates]);
+
+  // Compute region summaries from stations
+  const regionSummaries = useMemo(() => computeRegionSummaries(stations), [stations]);
+  const [selectedRegion, setSelectedRegion] = useState<RegionSummary | null>(null);
+
+  // Render the region details panel when a region is selected
+  useEffect(() => {
+    // no-op; effect kept to prevent linter unused-vars for setSelectedRegion usage above
+  }, [selectedRegion]);
 
   return (
     <div className="w-full h-full relative flex">
@@ -228,14 +239,15 @@ const AirQualityMap = ({ stations, onStationClick }: AirQualityMapProps) => {
         <div className="mb-4">
           <div className="text-xs text-slate-500 mb-2">Regional Summary</div>
           <div className="space-y-2">
-            {[{name: 'West', aqi: 63, coords: [37.7749,-122.4194]}, {name: 'Midwest', aqi: 63, coords: [41.8781,-87.6298]}, {name: 'Northeast', aqi: 63, coords: [40.7128,-74.0060]}, {name: 'South', aqi: 63, coords: [29.7604,-95.3698]}].map((region, idx) => (
+            {regionSummaries.map((region) => (
               <div key={region.name} className="flex items-center justify-between p-2 bg-slate-50 rounded border">
                 <div>
                   <div className="font-medium">{region.name}</div>
                   <div className="text-xs text-slate-500">Avg AQI {region.aqi}</div>
                 </div>
                 <div className="flex flex-col">
-                  <button onClick={() => { if (!mapRef.current) return; mapRef.current.setView(region.coords as any, 6); }} className="text-xs px-2 py-1 bg-blue-600 text-white rounded">Zoom</button>
+                  <button onClick={() => { if (!mapRef.current) return; mapRef.current.setView(region.coords as any, 6); }} className="text-xs px-2 py-1 bg-blue-600 text-white rounded mb-1">Zoom</button>
+                  <button onClick={() => setSelectedRegion(region)} className="text-xs px-2 py-1 bg-slate-200 rounded">View</button>
                 </div>
               </div>
             ))}
@@ -262,6 +274,9 @@ const AirQualityMap = ({ stations, onStationClick }: AirQualityMapProps) => {
 
       <div className="flex-1 relative">
         <div ref={mapContainerRef} className="w-full h-full" />
+        {selectedRegion && (
+          <RegionDetailsPanel region={selectedRegion} onClose={() => setSelectedRegion(null)} />
+        )}
       </div>
     </div>
   );
