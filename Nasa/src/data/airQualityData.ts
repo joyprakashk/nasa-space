@@ -1,5 +1,6 @@
 import { AirQualityStation, AirQualityForecast } from '../types/airQuality';
-import { apiService, OpenAQMeasurement, EPAAirNowData, TolNetData } from '../services/apiService';
+import { apiService, OpenAQMeasurement, EPAAirNowData } from '../services/apiService';
+import { getAQIFromPollutants } from '../types/airQuality';
 
 export const airQualityStations: AirQualityStation[] = [
   {
@@ -350,4 +351,149 @@ export const generateForecast = (currentAqi: number): AirQualityForecast[] => {
   }
 
   return forecasts;
+};
+
+// --- Global air report (country-level aggregation) ---
+export interface CountryAirSummary {
+  country: string;
+  count: number;
+  avgPm25: number;
+  avgPm10: number;
+  avgO3: number;
+  avgNo2: number;
+  aqi: number;
+  level: string;
+}
+
+export const fetchGlobalAirReport = async (limit = 2000): Promise<CountryAirSummary[]> => {
+  try {
+    const measurements = await apiService.fetchGlobalOpenAQ(limit);
+    if (!measurements || measurements.length === 0) return [];
+
+    const countryMap = new Map<string, { count: number; pm25: number; pm10: number; o3: number; no2: number }>();
+
+    for (const m of measurements) {
+      const country = (m.country || 'Unknown').toUpperCase();
+      if (!countryMap.has(country)) {
+        countryMap.set(country, { count: 0, pm25: 0, pm10: 0, o3: 0, no2: 0 });
+      }
+
+      const entry = countryMap.get(country)!;
+      entry.count += 1;
+      if (m.parameter === 'pm25') entry.pm25 += (m.value || 0);
+      if (m.parameter === 'pm10') entry.pm10 += (m.value || 0);
+      if (m.parameter === 'o3') entry.o3 += (m.value || 0);
+      if (m.parameter === 'no2') entry.no2 += (m.value || 0);
+    }
+
+    const summaries: CountryAirSummary[] = [];
+    for (const [country, vals] of countryMap.entries()) {
+      const avgPm25 = vals.count > 0 ? vals.pm25 / vals.count : 0;
+      const avgPm10 = vals.count > 0 ? vals.pm10 / vals.count : 0;
+      const avgO3 = vals.count > 0 ? vals.o3 / vals.count : 0;
+      const avgNo2 = vals.count > 0 ? vals.no2 / vals.count : 0;
+
+      // Build a pollutants object compatible with getAQIFromPollutants
+      const pollutants = { pm25: avgPm25, pm10: avgPm10, o3: avgO3, no2: avgNo2, so2: 0, co: 0 } as any;
+      const aqi = getAQIFromPollutants(pollutants);
+
+      summaries.push({
+        country,
+        count: vals.count,
+        avgPm25: Number(avgPm25.toFixed(2)),
+        avgPm10: Number(avgPm10.toFixed(2)),
+        avgO3: Number(avgO3.toFixed(2)),
+        avgNo2: Number(avgNo2.toFixed(2)),
+        aqi,
+        level: getAQILevel(aqi)
+      });
+    }
+
+    // Sort by worst AQI first
+    summaries.sort((a, b) => b.aqi - a.aqi);
+    return summaries;
+  } catch (error) {
+    console.error('Failed to fetch global air report:', error);
+    return [];
+  }
+};
+
+export interface RegionSummary {
+  name: string;
+  coords: [number, number];
+  aqi: number;
+  level: string;
+  pollutants: { pm25: number; pm10: number; o3: number; no2: number; so2: number; co: number };
+  weather: { temperature: number; humidity: number; windSpeed: number };
+  count: number;
+}
+
+/**
+ * Compute simple regional summaries (avg AQI and pollutant averages) from station list.
+ * Regions are defined by rough bounding boxes for the continental US.
+ */
+export const computeRegionSummaries = (stations: any[]): RegionSummary[] => {
+  const regions = [
+    { name: 'West', bounds: { latMin: 32, latMax: 49, lonMin: -125, lonMax: -102 }, coords: [37.7749, -122.4194] as [number, number] },
+    { name: 'Midwest', bounds: { latMin: 36, latMax: 49, lonMin: -103, lonMax: -84 }, coords: [41.8781, -87.6298] as [number, number] },
+    { name: 'Northeast', bounds: { latMin: 40, latMax: 47, lonMin: -80, lonMax: -66 }, coords: [40.7128, -74.0060] as [number, number] },
+    { name: 'South', bounds: { latMin: 24, latMax: 37.5, lonMin: -100, lonMax: -75 }, coords: [29.7604, -95.3698] as [number, number] },
+  ];
+
+  const summaries: RegionSummary[] = regions.map(r => ({
+    name: r.name,
+    coords: r.coords,
+    aqi: 0,
+    level: 'Unknown',
+    pollutants: { pm25: 0, pm10: 0, o3: 0, no2: 0, so2: 0, co: 0 },
+    weather: { temperature: 20, humidity: 50, windSpeed: 3 },
+    count: 0
+  }));
+
+  for (const s of stations) {
+    const lat = Number(s.coords?.[0] ?? s.coords?.[1] ?? 0);
+    const lon = Number(s.coords?.[1] ?? 0);
+    if (!isFinite(lat) || !isFinite(lon)) continue;
+
+    regions.forEach((r, idx) => {
+      const b = r.bounds;
+      if (lat >= b.latMin && lat <= b.latMax && lon >= b.lonMin && lon <= b.lonMax) {
+        const sum = summaries[idx];
+        sum.count += 1;
+        sum.aqi += (s.aqi || 0);
+        sum.pollutants.pm25 += (s.pollutants?.pm25 || 0);
+        sum.pollutants.pm10 += (s.pollutants?.pm10 || 0);
+        sum.pollutants.o3 += (s.pollutants?.o3 || 0);
+        sum.pollutants.no2 += (s.pollutants?.no2 || 0);
+        sum.pollutants.so2 += (s.pollutants?.so2 || 0);
+        sum.pollutants.co += (s.pollutants?.co || 0);
+        sum.weather.temperature += (s.weather?.temperature || 20);
+        sum.weather.humidity += (s.weather?.humidity || 50);
+        sum.weather.windSpeed += (s.weather?.windSpeed || 3);
+      }
+    });
+  }
+
+  return summaries.map(s => {
+    if (s.count === 0) return { ...s, aqi: 63, level: getAQILevel(63) };
+    const avgAqi = Math.round(s.aqi / s.count);
+    return {
+      ...s,
+      aqi: avgAqi,
+      level: getAQILevel(avgAqi),
+      pollutants: {
+        pm25: Number((s.pollutants.pm25 / s.count).toFixed(2)),
+        pm10: Number((s.pollutants.pm10 / s.count).toFixed(2)),
+        o3: Number((s.pollutants.o3 / s.count).toFixed(2)),
+        no2: Number((s.pollutants.no2 / s.count).toFixed(2)),
+        so2: Number((s.pollutants.so2 / s.count).toFixed(2)),
+        co: Number((s.pollutants.co / s.count).toFixed(2)),
+      },
+      weather: {
+        temperature: Number((s.weather.temperature / s.count).toFixed(1)),
+        humidity: Number((s.weather.humidity / s.count).toFixed(0)),
+        windSpeed: Number((s.weather.windSpeed / s.count).toFixed(1)),
+      }
+    } as RegionSummary;
+  });
 };
