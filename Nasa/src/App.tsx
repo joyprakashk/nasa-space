@@ -1,15 +1,22 @@
 import { useState, useEffect } from 'react';
 import AirQualityMap from './components/AirQualityMap';
+import SimpleSolarSystem from './components/SimpleSolarSystem';
 import ForecastPanel from './components/ForecastPanel';
 import AlertPanel from './components/AlertPanel';
 import AQILegend from './components/AQILegend';
+import DetailPage from './components/DetailPage';
+import RegionalDetailPage from './components/RegionalDetailPage';
 import { Wind, Satellite } from 'lucide-react';
 import { AirQualityStation } from './types/airQuality';
-import { airQualityStations, fetchRealTimeStations } from './data/airQualityData';
+import { airQualityStations, fetchRealTimeStations, RegionSummary } from './data/airQualityData';
 
 function App() {
   const [selectedStation, setSelectedStation] = useState<AirQualityStation | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState<RegionSummary | null>(null);
+  const [showSolarSystem, setShowSolarSystem] = useState(true);
   const [showLegend, setShowLegend] = useState(true);
+  const [showDetailPage, setShowDetailPage] = useState(false);
+  const [showRegionalDetailPage, setShowRegionalDetailPage] = useState(false);
   const [stations, setStations] = useState<AirQualityStation[]>(airQualityStations);
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -36,12 +43,42 @@ function App() {
 
   const handleStationClick = (station: AirQualityStation) => {
     setSelectedStation(station);
+    setShowDetailPage(true);
+  };
+
+  const enterMapFromSolar = () => {
+    setShowSolarSystem(false);
+  };
+
+  const handleBackFromDetail = () => {
+    setShowDetailPage(false);
+    setSelectedStation(null);
+  };
+
+  const handleRegionClick = (region: RegionSummary) => {
+    setSelectedRegion(region);
+    setShowRegionalDetailPage(true);
+  };
+
+  const handleBackFromRegionalDetail = () => {
+    setShowRegionalDetailPage(false);
+    setSelectedRegion(null);
   };
 
   const unhealthyCount = stations.filter(s => s.aqi > 100).length;
   const avgAQI = Math.round(
     stations.reduce((sum, s) => sum + s.aqi, 0) / stations.length
   );
+
+  // Show regional detail page if a region is selected
+  if (showRegionalDetailPage && selectedRegion) {
+    return <RegionalDetailPage region={selectedRegion} stations={stations} onBack={handleBackFromRegionalDetail} />;
+  }
+
+  // Show detail page if a station is selected
+  if (showDetailPage && selectedStation) {
+    return <DetailPage station={selectedStation} onBack={handleBackFromDetail} />;
+  }
 
   return (
     <div className="h-screen w-screen flex flex-col bg-slate-900">
@@ -78,6 +115,12 @@ function App() {
                 {isLoading ? 'Loading...' : 'Refresh'}
               </button>
               <button
+                onClick={() => setShowSolarSystem(!showSolarSystem)}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors text-sm font-medium"
+              >
+                {showSolarSystem ? 'Air Quality Map' : 'Solar System'}
+              </button>
+              <button
                 onClick={() => setShowLegend(!showLegend)}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
               >
@@ -89,7 +132,11 @@ function App() {
       </header>
 
       <div className="flex-1 relative">
-        <AirQualityMap stations={stations} onStationClick={handleStationClick} />
+        {showSolarSystem ? (
+          <SimpleSolarSystem onEnterMap={enterMapFromSolar} />
+        ) : (
+          <AirQualityMap stations={stations} onStationClick={handleStationClick} onRegionClick={handleRegionClick} />
+        )}
 
         <AlertPanel stations={stations} />
 
