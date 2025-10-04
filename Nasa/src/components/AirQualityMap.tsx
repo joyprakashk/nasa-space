@@ -11,9 +11,10 @@ import { useMemo } from 'react';
 interface AirQualityMapProps {
   stations: AirQualityStation[];
   onStationClick: (station: AirQualityStation) => void;
+  onRegionClick?: (region: RegionSummary) => void;
 }
 
-const AirQualityMap = ({ stations, onStationClick }: AirQualityMapProps) => {
+const AirQualityMap = ({ stations, onStationClick, onRegionClick }: AirQualityMapProps) => {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<L.Marker[]>([]);
@@ -247,7 +248,12 @@ const AirQualityMap = ({ stations, onStationClick }: AirQualityMapProps) => {
                 </div>
                 <div className="flex flex-col">
                   <button onClick={() => { if (!mapRef.current) return; mapRef.current.setView(region.coords as any, 6); }} className="text-xs px-2 py-1 bg-blue-600 text-white rounded mb-1">Zoom</button>
-                  <button onClick={() => setSelectedRegion(region)} className="text-xs px-2 py-1 bg-slate-200 rounded">View</button>
+                  <button 
+                    onClick={() => onRegionClick ? onRegionClick(region) : setSelectedRegion(region)} 
+                    className="text-xs px-2 py-1 bg-slate-200 hover:bg-slate-300 transition-colors rounded"
+                  >
+                    View
+                  </button>
                 </div>
               </div>
             ))}
