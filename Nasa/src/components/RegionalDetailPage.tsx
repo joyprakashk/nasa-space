@@ -1,6 +1,6 @@
 import React from 'react';
-import { ArrowLeft, MapPin, Wind, Droplets, Thermometer, Eye, AlertTriangle, TrendingUp, Clock, Activity, BarChart3, Globe } from 'lucide-react';
-import { RegionSummary } from '../data/airQualityData';
+import { ArrowLeft, MapPin, Droplets, Thermometer, AlertTriangle, TrendingUp, Clock, Activity, BarChart3, Globe } from 'lucide-react';
+import { RegionSummary, generateForecast } from '../data/airQualityData';
 import { AirQualityStation } from '../types/airQuality';
 
 interface RegionalDetailPageProps {
@@ -81,7 +81,7 @@ const RegionalDetailPage: React.FC<RegionalDetailPageProps> = ({ region, station
     ];
   };
 
-  const getRegionalInsights = (region: RegionSummary, stations: AirQualityStation[]) => {
+  const getRegionalInsights = (region: RegionSummary) => {
     const insights = [];
     
     if (region.aqi <= 50) {
@@ -143,27 +143,62 @@ const RegionalDetailPage: React.FC<RegionalDetailPageProps> = ({ region, station
            lon >= bounds.lonMin && lon <= bounds.lonMax;
   });
 
+  // Advanced analysis helpers
+  const computePollutantAverages = (list: AirQualityStation[]) => {
+    const totals = { pm25: 0, pm10: 0, o3: 0, no2: 0, so2: 0, co: 0 } as any;
+    list.forEach(s => {
+      totals.pm25 += s.pollutants?.pm25 || 0;
+      totals.pm10 += s.pollutants?.pm10 || 0;
+      totals.o3 += s.pollutants?.o3 || 0;
+      totals.no2 += s.pollutants?.no2 || 0;
+      totals.so2 += s.pollutants?.so2 || 0;
+      totals.co += s.pollutants?.co || 0;
+    });
+    const n = Math.max(1, list.length);
+    return {
+      pm25: Number((totals.pm25 / n).toFixed(2)),
+      pm10: Number((totals.pm10 / n).toFixed(2)),
+      o3: Number((totals.o3 / n).toFixed(2)),
+      no2: Number((totals.no2 / n).toFixed(2)),
+      so2: Number((totals.so2 / n).toFixed(2)),
+      co: Number((totals.co / n).toFixed(2)),
+    };
+  };
+
+  const topHotspots = (list: AirQualityStation[]) => {
+    return list.slice().sort((a, b) => (b.aqi || 0) - (a.aqi || 0)).slice(0, 3);
+  };
+
+  const unhealthyPercent = (list: AirQualityStation[]) => {
+    if (!list || list.length === 0) return 0;
+    const count = list.filter(s => (s.aqi || 0) > 100).length;
+    return Math.round((count / list.length) * 100);
+  };
+
+  const shortForecast = generateForecast(region.aqi).slice(0, 6);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
+    <div className="min-h-screen bg-black relative overflow-hidden">
       {/* Starfield Background */}
       <div className="absolute inset-0">
-        {Array.from({ length: 300 }).map((_, i) => (
+        {Array.from({ length: 600 }).map((_, i) => (
           <div
             key={i}
-            className="absolute w-1 h-1 bg-white rounded-full animate-pulse"
+            className="absolute rounded-full bg-white"
             style={{
+              width: `${Math.random() * 2 + 0.5}px`,
+              height: `${Math.random() * 2 + 0.5}px`,
               left: `${Math.random() * 100}%`,
               top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 4}s`,
-              animationDuration: `${2 + Math.random() * 3}s`,
-              opacity: Math.random() * 0.9 + 0.1
+              opacity: Math.random() * 0.8 + 0.2,
+              transform: `translateZ(0)`
             }}
           />
         ))}
       </div>
 
       {/* Shooting Stars */}
-      {Array.from({ length: 5 }).map((_, i) => (
+      {Array.from({ length: 8 }).map((_, i) => (
         <div
           key={i}
           className="absolute w-3 h-0.5 bg-white rounded-full animate-ping"
@@ -190,7 +225,7 @@ const RegionalDetailPage: React.FC<RegionalDetailPageProps> = ({ region, station
           
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold border-2 border-white">
-              NASA
+              Atoms.ai
             </div>
             <div className="text-white text-lg font-bold tracking-wider">
               REGIONAL AIR QUALITY ANALYSIS
@@ -319,7 +354,7 @@ const RegionalDetailPage: React.FC<RegionalDetailPageProps> = ({ region, station
               Regional Insights
             </h3>
             <div className="space-y-3">
-              {getRegionalInsights(region, stations).map((insight, index) => (
+              {getRegionalInsights(region).map((insight, index) => (
                 <div key={index} className="flex items-start gap-3 p-3 bg-white/5 rounded-lg">
                   <div className="w-2 h-2 bg-purple-400 rounded-full mt-2 flex-shrink-0" />
                   <span className="text-white">{insight}</span>
@@ -347,6 +382,60 @@ const RegionalDetailPage: React.FC<RegionalDetailPageProps> = ({ region, station
                     </span>
                     <p className="text-gray-400 text-sm">{station.level}</p>
                   </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Advanced Analysis */}
+        <div className="mt-8 bg-black/60 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
+          <h3 className="text-2xl font-bold text-white mb-4">Advanced Analysis</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="p-4 bg-white/5 rounded-lg">
+              <div className="text-sm text-gray-300">Top Hotspots (by AQI)</div>
+              <div className="mt-2 space-y-2">
+                {topHotspots(regionalStations).map(s => (
+                  <div key={s.id} className="flex justify-between items-center">
+                    <div className="text-white">{s.name}</div>
+                    <div className={`font-bold ${getAQIColor(s.aqi)}`}>{s.aqi}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-4 bg-white/5 rounded-lg">
+              <div className="text-sm text-gray-300">Pollutant Averages</div>
+              <div className="mt-2 text-white text-sm">
+                {(() => {
+                  const avg = computePollutantAverages(regionalStations);
+                  return (
+                    <div className="space-y-1">
+                      <div>PM2.5: <span className="font-bold">{avg.pm25}</span> µg/m³</div>
+                      <div>PM10: <span className="font-bold">{avg.pm10}</span> µg/m³</div>
+                      <div>O₃: <span className="font-bold">{avg.o3}</span> ppb</div>
+                      <div>NO₂: <span className="font-bold">{avg.no2}</span> ppb</div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            <div className="p-4 bg-white/5 rounded-lg">
+              <div className="text-sm text-gray-300">Unhealthy Stations</div>
+              <div className="mt-2 text-white text-3xl font-bold">{unhealthyPercent(regionalStations)}%</div>
+              <div className="text-sm text-gray-400">Percentage of stations with AQI &gt; 100</div>
+            </div>
+          </div>
+
+          <div className="bg-white/5 p-4 rounded-lg">
+            <div className="text-sm text-gray-300 mb-2">6-hour AQI Forecast (short)</div>
+            <div className="flex items-center gap-4 overflow-x-auto">
+              {shortForecast.map((f, idx) => (
+                <div key={idx} className="min-w-[120px] p-3 bg-black/40 rounded-lg border border-white/10">
+                  <div className="text-sm text-gray-300">{new Date(f.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                  <div className={`text-2xl font-bold mt-1 ${getAQIColor(f.aqi)}`}>{f.aqi}</div>
+                  <div className="text-xs text-gray-400">PM2.5: {Math.round(f.pm25)}</div>
                 </div>
               ))}
             </div>

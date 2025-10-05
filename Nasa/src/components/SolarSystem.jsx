@@ -705,13 +705,9 @@ const SolarSystem = ({ onEnterMap }) => {
         </div>
       )}
       
-      {/* Instructions (compact) */}
+      {/* View Earth button */}
       {!earthView && (
         <>
-          <div className="absolute top-6 left-6 text-white bg-black bg-opacity-60 p-3 rounded-lg backdrop-blur-sm">
-            <h2 className="text-xl font-semibold mb-0 text-yellow-400">Solar System Explorer</h2>
-          </div>
-          
           <button
             onClick={() => {
               setTransitioning(true);
@@ -799,16 +795,7 @@ const SolarSystem = ({ onEnterMap }) => {
         </div>
       )}
 
-      {/* Legend */}
-      {!earthView && (
-        <div className="absolute bottom-6 right-6 text-white bg-black bg-opacity-60 p-4 rounded-lg backdrop-blur-sm text-xs">
-          <p className="font-bold mb-2 text-yellow-400">Planets (in order):</p>
-          <div className="space-y-1">
-            <p>☿ Mercury • ♀ Venus • 🌍 Earth • ♂ Mars</p>
-            <p>♃ Jupiter • ♄ Saturn • ♅ Uranus • ♆ Neptune</p>
-          </div>
-        </div>
-      )}
+      {/* Legend removed per request */}
     </div>
   );
 };

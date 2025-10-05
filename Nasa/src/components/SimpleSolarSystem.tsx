@@ -172,7 +172,8 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
 
     // Sun
     const sunGeometry = new THREE.SphereGeometry(20, 64, 64);
-    const sunMaterial = new THREE.MeshBasicMaterial({ 
+    // Use MeshPhongMaterial so emissive is a valid property with TypeScript typings
+    const sunMaterial = new THREE.MeshPhongMaterial({ 
       color: 0xfdb813,
       emissive: 0xfdb813,
       emissiveIntensity: 1
@@ -302,17 +303,7 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
     const cloudPositions = cloudGeometry.attributes.position;
     const cloudColors: number[] = [];
     for (let i = 0; i < cloudPositions.count; i++) {
-      const x = cloudPositions.getX(i);
-      const y = cloudPositions.getY(i);
-      const z = cloudPositions.getZ(i);
-      
-      // Create realistic cloud patterns
-      const cloud1 = Math.sin(x * 0.12 + 5) * Math.cos(y * 0.15) * Math.sin(z * 0.13);
-      const cloud2 = Math.sin(x * 0.08) * Math.cos(y * 0.1 + 3) * Math.sin(z * 0.09 + 7);
-      const cloudSwirl = Math.sin(x * 0.05 + y * 0.08) * Math.cos(z * 0.06);
-      
-      const combinedClouds = (cloud1 + cloud2 * 0.6 + cloudSwirl * 0.4) / 2;
-      
+      // keep cloud color simple and uniform for now
       cloudColors.push(1, 1, 1);
     }
     cloudGeometry.setAttribute('color', new THREE.Float32BufferAttribute(cloudColors, 3));
@@ -837,13 +828,9 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
         </div>
       )}
       
-      {/* Instructions (compact) */}
+      {/* View Earth button */}
       {!earthView && (
         <>
-          <div className="absolute top-6 left-6 text-white bg-black bg-opacity-60 p-3 rounded-lg backdrop-blur-sm">
-            <h2 className="text-xl font-semibold mb-0 text-yellow-400">Solar System Explorer</h2>
-          </div>
-          
           <button
             onClick={() => {
               setTransitioning(true);
@@ -931,16 +918,7 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
         </div>
       )}
 
-      {/* Legend */}
-      {!earthView && (
-        <div className="absolute bottom-6 right-6 text-white bg-black bg-opacity-60 p-4 rounded-lg backdrop-blur-sm text-xs">
-          <p className="font-bold mb-2 text-yellow-400">Planets (in order):</p>
-          <div className="space-y-1">
-            <p>☿ Mercury • ♀ Venus • 🌍 Earth • ♂ Mars</p>
-            <p>♃ Jupiter • ♄ Saturn • ♅ Uranus • ♆ Neptune</p>
-          </div>
-        </div>
-      )}
+      {/* Legend removed per request */}
     </div>
   );
 };

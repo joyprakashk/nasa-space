@@ -90,8 +90,8 @@ function App() {
               <Satellite className="w-4 h-4 text-green-400 absolute -bottom-1 -right-1" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white">NASA TEMPO Air Quality Monitor</h1>
-              <p className="text-sm text-slate-400">Real-time Air Quality Forecasting System</p>
+              <h1 className="text-xl font-bold text-white">Atoms.ai</h1>
+                <p className="text-sm text-slate-400">Real-time Air Quality Forecasting System</p>
             </div>
           </div>
 
