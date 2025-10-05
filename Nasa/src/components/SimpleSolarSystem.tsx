@@ -44,7 +44,11 @@ interface PlanetUserData {
   cloudMesh?: THREE.Mesh;
 }
 
-const SolarSystem: React.FC = () => {
+interface SolarSystemProps {
+  onEnterMap?: () => void;
+}
+
+const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [selectedPlanet, setSelectedPlanet] = useState<PlanetData | null>(null);
   const [showInfo, setShowInfo] = useState<boolean>(false);
@@ -609,7 +613,14 @@ const SolarSystem: React.FC = () => {
     };
 
     const onClick = (e: MouseEvent): void => {
-      if (isEarthMode) return;
+      // If already viewing Earth, clicking anywhere should navigate to the map
+      if (isEarthMode) {
+        if (onEnterMap) {
+          // small delay to allow any UI feedback/animation to finish
+          setTimeout(() => onEnterMap(), 200);
+        }
+        return;
+      }
       
       const mouse = new THREE.Vector2();
       mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -641,6 +652,8 @@ const SolarSystem: React.FC = () => {
           cameraAngle = { theta: 0, phi: Math.PI / 2 };
           
           setTimeout(() => setTransitioning(false), 1000);
+          // If parent provided onEnterMap, navigate to the map shortly after the zoom completes
+          if (onEnterMap) setTimeout(() => onEnterMap(), 1100);
         } else {
           setSelectedPlanet(planetData[planetName]);
           setShowInfo(true);
@@ -812,26 +825,23 @@ const SolarSystem: React.FC = () => {
     <div className="relative w-full h-screen bg-black overflow-hidden">
       <div ref={mountRef} className="w-full h-full" />
       
-      {/* NASA Header for Earth View */}
+      {/* NASA Header for Earth View (smaller) */}
       {earthView && (
         <div className="absolute top-6 left-6 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold border-2 border-white">
+          <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold border-2 border-white">
             NASA
           </div>
-          <div className="text-white text-lg font-bold tracking-wider">
+          <div className="text-white text-base font-semibold tracking-wider">
             EYES ON THE SOLAR SYSTEM
           </div>
         </div>
       )}
       
-      {/* Instructions */}
+      {/* Instructions (compact) */}
       {!earthView && (
         <>
-          <div className="absolute top-6 left-6 text-white bg-black bg-opacity-60 p-4 rounded-lg backdrop-blur-sm">
-            <h2 className="text-2xl font-bold mb-2 text-yellow-400">🌌 Solar System Explorer</h2>
-            <p className="text-sm mb-1">🖱️ Drag to rotate view</p>
-            <p className="text-sm mb-1">🔍 Scroll to zoom in/out</p>
-            <p className="text-sm">🪐 Click planets for info</p>
+          <div className="absolute top-6 left-6 text-white bg-black bg-opacity-60 p-3 rounded-lg backdrop-blur-sm">
+            <h2 className="text-xl font-semibold mb-0 text-yellow-400">Solar System Explorer</h2>
           </div>
           
           <button
@@ -853,11 +863,7 @@ const SolarSystem: React.FC = () => {
         </>
       )}
 
-      {/* LIVE indicator */}
-      <div className="absolute bottom-8 left-8 flex items-center gap-2 text-white">
-        <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-        <span className="text-lg font-bold tracking-wider">LIVE</span>
-      </div>
+      {/* LIVE indicator removed per request */}
 
       {/* Back button for Earth view */}
       {earthView && (
