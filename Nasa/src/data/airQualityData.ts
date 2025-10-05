@@ -1,5 +1,4 @@
 import { AirQualityStation, AirQualityForecast } from '../types/airQuality';
-import { apiService, OpenAQMeasurement, EPAAirNowData } from '../services/apiService';
 import { getAQIFromPollutants } from '../types/airQuality';
 
 export const airQualityStations: AirQualityStation[] = [
@@ -228,7 +227,7 @@ export const stateAQIData = [
 ];
 
 // Convert OpenAQ data to station format
-export const convertOpenAQToStations = (measurements: OpenAQMeasurement[]): AirQualityStation[] => {
+export const convertOpenAQToStations = (measurements: any[]): AirQualityStation[] => {
   const stationMap = new Map<string, any>();
   
   measurements.forEach(m => {
@@ -272,7 +271,7 @@ export const convertOpenAQToStations = (measurements: OpenAQMeasurement[]): AirQ
 };
 
 // Convert EPA data to stations
-export const convertEPAToStations = (epaData: EPAAirNowData[]): AirQualityStation[] => {
+export const convertEPAToStations = (epaData: any[]): AirQualityStation[] => {
   return epaData.map((data, idx) => ({
     id: `epa-${idx}`,
     name: data.ReportingArea,
@@ -295,39 +294,32 @@ const getAQILevel = (aqi: number): string => {
 };
 
 // Fetch real-time data with enhanced error handling
-export const fetchRealTimeStations = async (epaApiKey?: string): Promise<AirQualityStation[]> => {
+export const fetchRealTimeStations = async (): Promise<AirQualityStation[]> => {
   try {
-    console.log('Fetching real-time data from OpenAQ, EPA AirNow, and NASA TolNet...');
-    const realTimeData = await apiService.fetchRealTimeData(epaApiKey);
-    
-    const openaqStations = convertOpenAQToStations(realTimeData.openaq);
-    const epaStations = convertEPAToStations(realTimeData.epa);
-    
-    // Add TolNet data as specialized ozone monitoring stations
-    const tolnetStations: AirQualityStation[] = realTimeData.tolnet.map((site, idx) => ({
-      id: `tolnet-${idx}`,
-      name: `NASA TolNet ${site.site}`,
-      location: `${site.site} Observatory`,
-      coords: [site.latitude, site.longitude],
-      aqi: Math.round((site.ozone_column - 250) / 2), // Convert ozone column to approximate AQI
-      level: getAQILevel(Math.round((site.ozone_column - 250) / 2)),
-      pollutants: {
-        pm25: 0,
-        pm10: 0,
-        o3: site.ozone_column / 10, // Convert to ppb equivalent
-        no2: site.no2_column / 1e13, // Convert to ppb equivalent
-        so2: 0,
-        co: 0
-      },
-      weather: { temperature: 20, humidity: 50, windSpeed: 3 }
-    }));
-    
-    const allStations = [...openaqStations.slice(0, 15), ...epaStations.slice(0, 10), ...tolnetStations];
-    console.log(`Fetched ${allStations.length} real-time stations`);
-    
-    return allStations.length > 0 ? allStations : airQualityStations;
+    console.log('Fetching real-time data directly from OpenAQ v2...');
+
+    // Fetch recent measurements from OpenAQ (v2)
+    const limit = 1000;
+    const url = `https://api.openaq.org/v2/measurements?limit=${limit}&page=1&offset=0&sort=desc&order_by=datetime&parameter=pm25,pm10,o3,no2,so2,co`;
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      console.warn('OpenAQ fetch failed with status', resp.status);
+      return airQualityStations;
+    }
+
+    const data = await resp.json();
+    const openaqMeasurements = data.results || [];
+
+    const openaqStations = convertOpenAQToStations(openaqMeasurements);
+
+    // Optionally, if an EPA API key is provided, you could fetch EPA AirNow here.
+    // For now, avoid server-side apiService and rely on OpenAQ as the primary real-time source.
+
+    const allStations = openaqStations.length > 0 ? openaqStations : airQualityStations;
+    console.log(`Fetched ${allStations.length} real-time stations from OpenAQ`);
+    return allStations;
   } catch (error) {
-    console.error('Failed to fetch real-time data:', error);
+    console.error('Failed to fetch real-time data from OpenAQ:', error);
     return airQualityStations;
   }
 };
@@ -367,7 +359,14 @@ export interface CountryAirSummary {
 
 export const fetchGlobalAirReport = async (limit = 2000): Promise<CountryAirSummary[]> => {
   try {
-    const measurements = await apiService.fetchGlobalOpenAQ(limit);
+    // Fetch global recent measurements from OpenAQ v2
+    const pageSize = Math.min(limit, 1000);
+    const url = `https://api.openaq.org/v2/measurements?limit=${pageSize}&page=1&offset=0&sort=desc&order_by=datetime&parameter=pm25,pm10,o3,no2`;
+    const resp = await fetch(url);
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    const measurements = data.results || [];
+
     if (!measurements || measurements.length === 0) return [];
 
     const countryMap = new Map<string, { count: number; pm25: number; pm10: number; o3: number; no2: number }>();

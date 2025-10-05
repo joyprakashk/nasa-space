@@ -8,7 +8,7 @@ import DetailPage from './components/DetailPage';
 import RegionalDetailPage from './components/RegionalDetailPage';
 import { Wind, Satellite } from 'lucide-react';
 import { AirQualityStation } from './types/airQuality';
-import { airQualityStations, fetchRealTimeStations, RegionSummary } from './data/airQualityData';
+import { fetchRealTimeStations, RegionSummary } from './data/airQualityData';
 
 function App() {
   const [selectedStation, setSelectedStation] = useState<AirQualityStation | null>(null);
@@ -17,16 +17,17 @@ function App() {
   const [showLegend, setShowLegend] = useState(true);
   const [showDetailPage, setShowDetailPage] = useState(false);
   const [showRegionalDetailPage, setShowRegionalDetailPage] = useState(false);
-  const [stations, setStations] = useState<AirQualityStation[]>(airQualityStations);
-  const [isLoading, setIsLoading] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [stations, setStations] = useState<AirQualityStation[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   
 
   const loadRealTimeData = async () => {
     setIsLoading(true);
     try {
       const realTimeStations = await fetchRealTimeStations();
-      setStations(realTimeStations.length > 0 ? realTimeStations : airQualityStations);
+      // Use real-time stations directly; do not default to the hardcoded sample data
+      setStations(realTimeStations || []);
       setLastUpdated(new Date());
     } catch (error) {
       console.error('Failed to load real-time data:', error);
@@ -65,10 +66,8 @@ function App() {
     setSelectedRegion(null);
   };
 
-  const unhealthyCount = stations.filter(s => s.aqi > 100).length;
-  const avgAQI = Math.round(
-    stations.reduce((sum, s) => sum + s.aqi, 0) / stations.length
-  );
+  const unhealthyCount = stations.length > 0 ? stations.filter(s => s.aqi > 100).length : 0;
+  const avgAQI = stations.length > 0 ? Math.round(stations.reduce((sum, s) => sum + (s.aqi || 0), 0) / stations.length) : 0;
 
   // Show regional detail page if a region is selected
   if (showRegionalDetailPage && selectedRegion) {
@@ -150,7 +149,7 @@ function App() {
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${isLoading ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`} />
-              <span>Live Data • Updated {lastUpdated.toLocaleTimeString()}</span>
+              <span>Live Data • Updated {lastUpdated ? lastUpdated.toLocaleTimeString() : '—'}</span>
             </div>
             <div className="flex items-center gap-3 text-xs">
               <span className="flex items-center gap-1"><div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>OpenAQ</span>
