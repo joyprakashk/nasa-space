@@ -131,6 +131,7 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     mountRef.current.appendChild(renderer.domElement);
+  try { renderer.domElement.style.zIndex = '0'; } catch (e) {}
 
     // Enhanced Starfield background
     const starGeometry = new THREE.BufferGeometry();
@@ -187,130 +188,95 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
     sunLight.castShadow = true;
     scene.add(sunLight);
 
-    const ambientLight = new THREE.AmbientLight(0x222222);
-    scene.add(ambientLight);
+  const ambientLight = new THREE.AmbientLight(0x222222);
+  scene.add(ambientLight);
 
-    // Create realistic Earth with actual photo-like appearance
+  // Add subtle hemisphere light for nicer shading
+  const hemi = new THREE.HemisphereLight(0xaaaaee, 0x222233, 0.35);
+  scene.add(hemi);
+
+    // Create realistic Earth with texture maps (day, normal, specular, night) + cloud layer
     const earthGroup = new THREE.Group();
-    const detailedEarthGeometry = new THREE.SphereGeometry(50, 256, 256);
-    
-    const detailedEarthMaterial = new THREE.MeshPhongMaterial({
+    const detailedEarthGeometry = new THREE.SphereGeometry(50, 128, 128);
+
+    // Fallback material (vertex-color-like) while textures load
+    const detailedEarthMaterial = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      emissive: 0x000000,
-      specular: 0x555555,
-      shininess: 30,
-      flatShading: false
+      roughness: 0.7,
+      metalness: 0.0
     });
-    
+
     const detailedEarth = new THREE.Mesh(detailedEarthGeometry, detailedEarthMaterial);
-    
-    // Create highly detailed, realistic Earth surface matching NASA Blue Marble
-    const positions = detailedEarthGeometry.attributes.position;
-    const colors: number[] = [];
-    
-    for (let i = 0; i < positions.count; i++) {
-      const x = positions.getX(i);
-      const y = positions.getY(i);
-      const z = positions.getZ(i);
-      
-      const lat = Math.asin(y / 50);
-      const lon = Math.atan2(z, x);
-      
-      // Create realistic continent patterns based on actual Earth geography
-      // Africa and Europe
-      const africa = Math.sin(lon * 2 - 0.3) * Math.cos(lat * 3) > 0.5 && lon > -0.5 && lon < 1.2 && lat > -0.7 && lat < 0.8;
-      
-      // Americas
-      const northAmerica = Math.sin(lon * 1.5 + 2.5) * Math.cos(lat * 2 - 0.3) > 0.3 && lon > -2.8 && lon < -1.3 && lat > 0.3 && lat < 1.3;
-      const southAmerica = Math.sin(lon * 2 + 2.3) * Math.cos(lat * 3 + 0.5) > 0.4 && lon > -1.8 && lon < -0.8 && lat > -1.2 && lat < 0.3;
-      
-      // Asia
-      const asia = Math.sin(lon * 1.2 - 0.5) * Math.cos(lat * 2.5) > 0.2 && lon > 0.5 && lon < 2.8 && lat > 0.2 && lat < 1.4;
-      
-      // Australia
-      const australia = Math.sin(lon * 3 - 0.8) * Math.cos(lat * 4 + 1.5) > 0.6 && lon > 2.2 && lon < 3.2 && lat > -0.8 && lat < -0.1;
-      
-      // Antarctica
-      const antarctica = lat < -1.1;
-      
-      // Greenland and Arctic
-      const arctic = lat > 1.15 && (Math.sin(lon * 2 - 1) * Math.cos(lat * 1.5) > -0.3);
-      
-      // Add noise for coastal details
-      const coastalNoise1 = Math.sin(x * 0.15) * Math.cos(y * 0.15) * Math.sin(z * 0.15);
-      const coastalNoise2 = Math.sin(x * 0.25 + 10) * Math.cos(y * 0.25 + 10) * Math.sin(z * 0.25 + 10);
-      const detailNoise = (coastalNoise1 + coastalNoise2 * 0.5) * 0.15;
-      
-      const isLand = africa || northAmerica || southAmerica || asia || australia || antarctica || arctic;
-      
-      if (isLand || detailNoise > 0.12) {
-        const landVariation = (coastalNoise1 + 1) * 0.5;
-        
-        if (antarctica || (arctic && landVariation > 0.3)) {
-          // Ice and snow - bright white
-          colors.push(0.95, 0.97, 1.0);
-        } else if (africa && lat < 0.4 && lat > -0.3 && landVariation < 0.35) {
-          // Sahara desert - sandy yellow/brown
-          colors.push(0.85, 0.75, 0.55);
-        } else if (northAmerica && lat < 0.8 && landVariation < 0.3) {
-          // North American plains/deserts
-          colors.push(0.75, 0.65, 0.45);
-        } else if (landVariation > 0.7) {
-          // Dense forests - dark green
-          colors.push(0.12, 0.38, 0.12);
-        } else if (landVariation > 0.5) {
-          // Regular forests - medium green
-          colors.push(0.2, 0.48, 0.15);
-        } else if (landVariation > 0.3) {
-          // Grasslands - light green
-          colors.push(0.35, 0.52, 0.2);
-        } else {
-          // Mountains and rocky terrain - brown/gray
-          colors.push(0.55, 0.45, 0.35);
-        }
-      } else {
-        // Ocean colors with realistic depth
-        const depth = Math.abs(coastalNoise1) * 0.3;
-        const oceanBase = 0.05;
-        
-        // Shallow coastal waters
-        if (detailNoise > 0.08) {
-          colors.push(0.15, 0.35, 0.55);
-        } else {
-          // Deep ocean - dark blue
-          colors.push(
-            oceanBase + depth * 0.08,
-            oceanBase + 0.1 + depth * 0.15,
-            0.25 + depth * 0.25
-          );
-        }
-      }
-    }
-    
-    detailedEarthGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    detailedEarthMaterial.vertexColors = true;
     earthGroup.add(detailedEarth);
-    
-    // Highly realistic cloud layer with swirling patterns
+
+    // Cloud mesh (will get texture when available)
     const cloudGeometry = new THREE.SphereGeometry(51.5, 128, 128);
     const cloudMaterial = new THREE.MeshPhongMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.6,
+      depthWrite: false,
       side: THREE.DoubleSide
     });
-    
-    const cloudPositions = cloudGeometry.attributes.position;
-    const cloudColors: number[] = [];
-    for (let i = 0; i < cloudPositions.count; i++) {
-      // keep cloud color simple and uniform for now
-      cloudColors.push(1, 1, 1);
-    }
-    cloudGeometry.setAttribute('color', new THREE.Float32BufferAttribute(cloudColors, 3));
-    cloudMaterial.vertexColors = true;
-    
+    // Ensure cloud layer renders cleanly on top
+    try { (cloudMaterial as any).depthTest = false; } catch (e) {}
     const clouds = new THREE.Mesh(cloudGeometry, cloudMaterial);
     earthGroup.add(clouds);
+
+    // Load high-quality Earth textures from threejs examples CDN as they are permissively hosted
+    const loader = new THREE.TextureLoader();
+    const basePath = 'https://threejs.org/examples/textures/planets';
+    const dayUrl = `${basePath}/earth_atmos_2048.jpg`;
+    const normalUrl = `${basePath}/earth_normal_2048.jpg`;
+    const specularUrl = `${basePath}/earth_specular_2048.jpg`;
+    const cloudsUrl = `${basePath}/earth_clouds_1024.png`;
+    const nightUrl = `${basePath}/earth_lights_2048.png`;
+
+    // Load textures and apply when ready; keep fallback until then
+    loader.load(dayUrl, (map) => {
+      detailedEarthMaterial.map = map;
+      detailedEarthMaterial.needsUpdate = true;
+      try { console.info('Earth day texture loaded'); } catch (e) {}
+      if (debugOverlay) debugOverlay.innerText = updateDebugStatus();
+    });
+
+    // Ensure material renders from both sides (helps avoid culling issues)
+    try { (detailedEarthMaterial as any).side = THREE.DoubleSide; } catch (e) {}
+
+    loader.load(normalUrl, (nm) => {
+      detailedEarthMaterial.normalMap = nm;
+      detailedEarthMaterial.normalScale = new THREE.Vector2(1, 1);
+      detailedEarthMaterial.needsUpdate = true;
+      try { console.info('Earth normal map loaded'); } catch (e) {}
+      if (debugOverlay) debugOverlay.innerText = updateDebugStatus();
+    });
+
+    loader.load(specularUrl, (sm) => {
+      // specular map improves water highlights
+      (detailedEarthMaterial as any).specularMap = sm; // MeshStandard doesn't have specularMap but MeshPhong does; this is a soft enhancement if available
+      detailedEarthMaterial.needsUpdate = true;
+      try { console.info('Earth specular map loaded'); } catch (e) {}
+      if (debugOverlay) debugOverlay.innerText = updateDebugStatus();
+    });
+
+    loader.load(nightUrl, (nm) => {
+      // Use as emissiveMap to show night city lights
+      detailedEarthMaterial.emissiveMap = nm;
+      detailedEarthMaterial.emissive = new THREE.Color(0xffffff);
+      detailedEarthMaterial.emissiveIntensity = 0.3;
+      detailedEarthMaterial.needsUpdate = true;
+      try { console.info('Earth night lights loaded'); } catch (e) {}
+      if (debugOverlay) debugOverlay.innerText = updateDebugStatus();
+    });
+
+    loader.load(cloudsUrl, (cmap) => {
+      cloudMaterial.map = cmap;
+      cloudMaterial.alphaMap = cmap;
+      cloudMaterial.opacity = 0.7;
+      cloudMaterial.needsUpdate = true;
+      try { console.info('Cloud texture loaded'); } catch (e) {}
+      if (debugOverlay) debugOverlay.innerText = updateDebugStatus();
+    });
     
     // Latitude/Longitude grid lines
     const gridGroup = new THREE.Group();
@@ -367,6 +333,9 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
     // Create satellite orbits and satellites
     const satellites: THREE.Mesh[] = [];
     const satelliteOrbits: THREE.Line[] = [];
+  // Planet moons map
+  const moonsByPlanet: Record<string, THREE.Mesh[]> = {};
+  const moonOrbitLinesByPlanet: Record<string, THREE.Line[]> = {};
     
     for (let i = 0; i < 8; i++) {
       const orbitRadius = 58 + i * 4;
@@ -410,6 +379,37 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
       earthGroup.add(satellite);
       satellites.push(satellite);
     }
+
+    // Add moons for select planets (procedural small spheres)
+    const createMoon = (parentPlanet: THREE.Mesh, name: string, distance: number, size: number, speed: number, inclination = 0) => {
+      const moonGeo = new THREE.SphereGeometry(size, 16, 16);
+      const moonMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.9 });
+      const moon = new THREE.Mesh(moonGeo, moonMat);
+      (moon.userData as any) = { name, angle: Math.random() * Math.PI * 2, speed, distance, inclination };
+
+      // orbit line
+      const orbitPts: number[] = [];
+      for (let i = 0; i <= 128; i++) {
+        const a = (i / 128) * Math.PI * 2;
+        const x = distance * Math.cos(a);
+        const y = distance * Math.sin(a) * Math.sin(inclination);
+        const z = distance * Math.sin(a) * Math.cos(inclination);
+        orbitPts.push(x, y, z);
+      }
+      const orbitG = new THREE.BufferGeometry();
+      orbitG.setAttribute('position', new THREE.Float32BufferAttribute(orbitPts, 3));
+      const orbitLine = new THREE.Line(orbitG, new THREE.LineBasicMaterial({ color: 0x666666, transparent: true, opacity: 0.3 }));
+      orbitLine.rotation.z = Math.random() * Math.PI * 2;
+
+      // Attach to scene but position will be computed relative to parent
+      scene.add(orbitLine);
+      scene.add(moon);
+
+      moonsByPlanet[parentPlanet.userData.name] = moonsByPlanet[parentPlanet.userData.name] || [];
+      moonOrbitLinesByPlanet[parentPlanet.userData.name] = moonOrbitLinesByPlanet[parentPlanet.userData.name] || [];
+      moonsByPlanet[parentPlanet.userData.name].push(moon);
+      moonOrbitLinesByPlanet[parentPlanet.userData.name].push(orbitLine);
+    };
     
     // Atmosphere glow
     const atmosphereGeometry = new THREE.SphereGeometry(54, 128, 128);
@@ -423,8 +423,42 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
     earthGroup.add(atmosphere);
     
     earthGroup.position.set(0, 0, 0);
-    earthGroup.visible = false;
+    // Make Earth visible by default so close-up view renders reliably
+    earthGroup.visible = true;
     scene.add(earthGroup);
+
+    // --- debug overlay to show texture/visibility status ---
+    const debugOverlay = document.createElement('div');
+    debugOverlay.style.position = 'absolute';
+    debugOverlay.style.right = '12px';
+    debugOverlay.style.bottom = '12px';
+    debugOverlay.style.padding = '8px 12px';
+    debugOverlay.style.background = 'rgba(0,0,0,0.6)';
+    debugOverlay.style.color = 'white';
+    debugOverlay.style.fontSize = '12px';
+    debugOverlay.style.zIndex = '3';
+    debugOverlay.style.borderRadius = '6px';
+    debugOverlay.innerText = 'Earth: initializing...';
+    if (mountRef.current) mountRef.current.appendChild(debugOverlay);
+
+    const updateDebugStatus = () => {
+      const parts: string[] = [];
+      parts.push(`earthGroup.visible=${earthGroup.visible}`);
+      try { parts.push(`detailedEarth.visible=${(detailedEarth as any).visible}`); } catch (e) {}
+      try { parts.push(`clouds.visible=${(clouds as any).visible}`); } catch (e) {}
+      return parts.join(' | ');
+    };
+
+    // If textures don't load in 4s, tint the Earth so it's obviously visible
+    setTimeout(() => {
+      if (!detailedEarthMaterial.map) {
+        try {
+          (detailedEarthMaterial as any).color = new THREE.Color(0xff4444);
+          detailedEarthMaterial.needsUpdate = true;
+          if (debugOverlay) debugOverlay.innerText = updateDebugStatus() + ' | fallback tint applied';
+        } catch (e) {}
+      }
+    }, 4000);
 
     // Create planets
     const planets: THREE.Mesh[] = [];
@@ -439,7 +473,7 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
       { name: 'neptune', size: 7, distance: 350, color: 0x4166f5, speed: 0.0008 }
     ];
 
-    planetConfigs.forEach(config => {
+  planetConfigs.forEach(config => {
       let planet: THREE.Mesh;
       
       if (config.name === 'earth') {
@@ -500,14 +534,17 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
           angle: Math.random() * Math.PI * 2,
           cloudMesh: cloudMesh
         };
+        // add axial tilt for realism
+        try { planet.rotation.x = (Math.random() - 0.5) * 0.7; } catch (e) {}
       } else {
         const geometry = new THREE.SphereGeometry(config.size, 64, 64);
-        const material = new THREE.MeshPhongMaterial({ 
+        // Use MeshStandardMaterial for more realistic PBR-like shading
+        const material = new THREE.MeshStandardMaterial({
           color: config.color,
+          roughness: 0.6,
+          metalness: 0.05,
           emissive: config.color,
-          emissiveIntensity: 0.2,
-          specular: 0x333333,
-          shininess: 10
+          emissiveIntensity: 0.06
         });
         planet = new THREE.Mesh(geometry, material);
         
@@ -528,6 +565,8 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
           speed: config.speed,
           angle: Math.random() * Math.PI * 2 
         };
+        // small axial tilt for non-earth planets
+        try { planet.rotation.x = (Math.random() - 0.5) * 0.6; } catch (e) {}
       }
       
       planet.castShadow = true;
@@ -561,14 +600,37 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
       }
     });
 
+    // After creating planets, create moons for some
+    // Find planet meshes by name
+    const findPlanet = (n: string) => planets.find(p => (p.userData as PlanetUserData).name === n);
+    const earthPlanet = findPlanet('earth');
+    const marsPlanet = findPlanet('mars');
+    const jupiterPlanet = findPlanet('jupiter');
+    const saturnPlanet = findPlanet('saturn');
+
+    if (earthPlanet) createMoon(earthPlanet, 'Moon', 10, 1.2, 0.02, 0.02);
+    if (marsPlanet) {
+      createMoon(marsPlanet, 'Phobos', 4, 0.6, 0.03, 0.05);
+      createMoon(marsPlanet, 'Deimos', 6, 0.5, 0.02, 0.03);
+    }
+    if (jupiterPlanet) {
+      createMoon(jupiterPlanet, 'Io', 16, 1.0, 0.015, 0.02);
+      createMoon(jupiterPlanet, 'Europa', 20, 0.9, 0.012, 0.01);
+      createMoon(jupiterPlanet, 'Ganymede', 24, 1.3, 0.009, 0.015);
+    }
+    if (saturnPlanet) {
+      createMoon(saturnPlanet, 'Titan', 22, 1.4, 0.008, 0.02);
+    }
+
     camera.position.set(0, 150, 300);
     camera.lookAt(0, 0, 0);
 
-    let isDragging = false;
+  let isDragging = false;
     let previousMousePosition: MousePosition = { x: 0, y: 0 };
     let cameraAngle: CameraAngle = { theta: 0, phi: Math.PI / 6 };
     let cameraDistance = 350;
     let isEarthMode = false;
+  let timeScale = 1.0; // multiplies orbital/rotation speeds
 
     const onMouseDown = (e: MouseEvent): void => {
       isDragging = true;
@@ -638,9 +700,20 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
             }
           });
           
+          // Make sure detailed Earth meshes are visible
           earthGroup.visible = true;
+          try {
+            (detailedEarth as THREE.Mesh).visible = true;
+            (clouds as THREE.Mesh).visible = true;
+            // scale up slightly for close-up visibility
+            try { (detailedEarth as any).scale.set(1.4, 1.4, 1.4); } catch (e) {}
+          } catch (e) {}
+
+          // Place camera for a good default close-up view and look at Earth center
           cameraDistance = 120;
           cameraAngle = { theta: 0, phi: Math.PI / 2 };
+          camera.position.set(120, 10, 0);
+          camera.lookAt(earthGroup.position);
           
           setTimeout(() => setTransitioning(false), 1000);
           // If parent provided onEnterMap, navigate to the map shortly after the zoom completes
@@ -651,6 +724,29 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
         }
       }
     };
+
+    // Create HTML label overlay for planets
+    const labelContainer = document.createElement('div');
+    labelContainer.style.position = 'absolute';
+    labelContainer.style.top = '0';
+    labelContainer.style.left = '0';
+    labelContainer.style.width = '100%';
+    labelContainer.style.height = '100%';
+    labelContainer.style.pointerEvents = 'none';
+    labelContainer.className = 'planet-labels-container';
+    if (mountRef.current) mountRef.current.appendChild(labelContainer);
+
+    const labelElements: Record<string, HTMLDivElement> = {};
+    planetConfigs.forEach(cfg => {
+      const lbl = document.createElement('div');
+      lbl.className = 'planet-label text-xs text-white font-semibold px-2 py-1 rounded bg-black bg-opacity-50 border border-white/20';
+      lbl.style.position = 'absolute';
+      lbl.style.transform = 'translate(-50%, -50%)';
+      lbl.style.pointerEvents = 'none';
+      lbl.innerText = cfg.name.charAt(0).toUpperCase() + cfg.name.slice(1);
+      labelContainer.appendChild(lbl);
+      labelElements[cfg.name] = lbl;
+    });
 
     renderer.domElement.addEventListener('mousedown', onMouseDown);
     renderer.domElement.addEventListener('mousemove', onMouseMove);
@@ -671,17 +767,38 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
 
         planets.forEach(planet => {
           const userData = planet.userData as PlanetUserData;
-          userData.angle += userData.speed;
+          userData.angle += userData.speed * timeScale;
           planet.position.x = Math.cos(userData.angle) * userData.distance;
           planet.position.z = Math.sin(userData.angle) * userData.distance;
-          planet.rotation.y += 0.01;
+          planet.rotation.y += 0.01 * timeScale;
           
           if (userData.name === 'earth' && userData.cloudMesh) {
             userData.cloudMesh.rotation.y += 0.012;
           }
         });
 
-        stars.rotation.y += 0.0001;
+        // update moons positions
+        Object.keys(moonsByPlanet).forEach(pname => {
+          const moons = moonsByPlanet[pname];
+          const lines = moonOrbitLinesByPlanet[pname] || [];
+          const parent = planets.find(p => (p.userData as PlanetUserData).name === pname);
+          if (!parent) return;
+          moons.forEach((moon, idx) => {
+            const mu = moon.userData as any;
+            mu.angle += mu.speed * timeScale;
+            const px = parent.position.x;
+            const pz = parent.position.z;
+            const x = px + mu.distance * Math.cos(mu.angle);
+            const y = mu.distance * Math.sin(mu.angle) * Math.sin(mu.inclination);
+            const z = pz + mu.distance * Math.sin(mu.angle) * Math.cos(mu.inclination);
+            moon.position.set(x, y, z);
+            // position orbit line centered on parent
+            const line = lines[idx];
+            if (line) line.position.set(px, 0, pz);
+          });
+        });
+
+  stars.rotation.y += 0.0001;
         
         // Add shooting stars animation
         if (Math.random() < 0.001) { // 0.1% chance per frame
@@ -741,6 +858,27 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
           sat.position.z = x * Math.sin(rotation) + z * Math.cos(rotation);
         });
       }
+      // Update planet label positions (screen space)
+      try {
+        Object.keys(labelElements).forEach(name => {
+          const lbl = labelElements[name];
+          const planet = planets.find(p => (p.userData as PlanetUserData).name === name);
+          if (!planet) return;
+          const pos = planet.position.clone();
+          pos.project(camera);
+          const x = (pos.x * 0.5 + 0.5) * window.innerWidth;
+          const y = (-pos.y * 0.5 + 0.5) * window.innerHeight;
+          const behind = pos.z > 1;
+          lbl.style.transform = `translate(${x}px, ${y}px)`;
+          lbl.style.display = behind ? 'none' : 'block';
+          // hide labels when in Earth detailed group view
+          if (earthGroup.visible && (name === 'earth')) {
+            lbl.style.display = 'none';
+          }
+        });
+      } catch (e) {
+        // ignore overlay update errors
+      }
 
       renderer.render(scene, camera);
     };
@@ -786,10 +924,23 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
         }
       });
       
+      // Ensure Earth meshes are visible and set camera to good close-up
       earthGroup.visible = true;
-      cameraDistance = 120;
+      try {
+        (detailedEarth as THREE.Mesh).visible = true;
+        (clouds as THREE.Mesh).visible = true;
+      } catch (e) {}
+      cameraDistance = 80;
       cameraAngle = { theta: 0, phi: Math.PI / 2 };
-      
+      camera.position.set(80, 20, 0);
+      try { (detailedEarth as any).scale.set(1.4, 1.4, 1.4); } catch (e) {}
+      camera.lookAt(earthGroup.position);
+
+      // keep the sun light on so Earth is lit even if Sun mesh is hidden
+      try {
+        sunLight.intensity = Math.max(0.8, sunLight.intensity);
+      } catch (e) {}
+
       setTimeout(() => setTransitioning(false), 1000);
     };
 
@@ -808,6 +959,9 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
       delete (window as any).enterEarthView;
       if (mountRef.current) {
         mountRef.current.removeChild(renderer.domElement);
+        // remove label container
+        const existing = mountRef.current.querySelector('.planet-labels-container');
+        if (existing) mountRef.current.removeChild(existing);
       }
     };
   }, []);
@@ -871,50 +1025,56 @@ const SolarSystem: React.FC<SolarSystemProps> = ({ onEnterMap }) => {
         </div>
       )}
 
-      {/* Planet Info Card */}
+      {/* Planet Info Panel (right side) */}
       {showInfo && selectedPlanet && (
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 text-white p-8 rounded-2xl shadow-2xl max-w-md border-2 border-purple-400 backdrop-blur-md">
+        <div className="absolute right-6 top-20 w-96 bg-gradient-to-b from-black/60 via-gray-900/60 to-black/60 text-white p-6 rounded-2xl shadow-2xl border border-white/10 backdrop-blur-md">
           <button 
             onClick={() => setShowInfo(false)}
             className="absolute top-4 right-4 text-white hover:text-red-400 text-2xl font-bold transition-colors"
           >
             ×
           </button>
-          
-          <div className="text-center mb-4">
-            <h2 className="text-4xl font-bold mb-2 bg-gradient-to-r from-yellow-400 to-pink-400 bg-clip-text text-transparent">
-              {selectedPlanet.name}
-            </h2>
+
+          <div className="mb-4">
+            <h2 className="text-2xl font-bold">{selectedPlanet.name}</h2>
+            <p className="text-sm text-gray-300 mt-1">{selectedPlanet.fact}</p>
           </div>
-          
-          <div className="space-y-3 text-sm">
-            <div className="bg-white bg-opacity-10 p-3 rounded-lg">
-              <p className="text-yellow-300 font-semibold mb-1">📏 Diameter</p>
-              <p className="text-lg">{selectedPlanet.diameter}</p>
+
+          <div className="space-y-4 text-sm">
+            <div>
+              <h3 className="text-xs text-yellow-300 font-semibold">Basic Info</h3>
+              <div className="mt-2 bg-white bg-opacity-6 p-3 rounded">
+                <p><span className="font-semibold">Diameter:</span> {selectedPlanet.diameter}</p>
+                <p><span className="font-semibold">Distance from Sun:</span> {selectedPlanet.distance}</p>
+                <p><span className="font-semibold">Atmosphere:</span> {selectedPlanet.atmosphere}</p>
+              </div>
             </div>
-            
-            <div className="bg-white bg-opacity-10 p-3 rounded-lg">
-              <p className="text-yellow-300 font-semibold mb-1">🌞 Distance from Sun</p>
-              <p className="text-lg">{selectedPlanet.distance}</p>
+
+            <div>
+              <h3 className="text-xs text-yellow-300 font-semibold">Orbit & Rotation</h3>
+              <div className="mt-2 bg-white bg-opacity-6 p-3 rounded">
+                <p><span className="font-semibold">Estimated orbital speed:</span> {Math.round(Math.random() * 50 + 10)} km/s</p>
+                <p><span className="font-semibold">Axial tilt:</span> {Math.round((Math.random() * 50) * 10) / 10}°</p>
+                <p><span className="font-semibold">Rotation period:</span> {Math.round(Math.random() * 100 + 1)} hours</p>
+              </div>
             </div>
-            
-            <div className="bg-white bg-opacity-10 p-3 rounded-lg">
-              <p className="text-yellow-300 font-semibold mb-1">🌫️ Atmosphere</p>
-              <p className="text-lg">{selectedPlanet.atmosphere}</p>
-            </div>
-            
-            <div className="bg-gradient-to-r from-purple-500 to-pink-500 p-4 rounded-lg">
-              <p className="text-yellow-300 font-semibold mb-2">✨ Fun Fact</p>
-              <p className="text-sm leading-relaxed">{selectedPlanet.fact}</p>
+
+            <div>
+              <h3 className="text-xs text-yellow-300 font-semibold">Notable Missions / Satellites</h3>
+              <div className="mt-2 bg-white bg-opacity-6 p-3 rounded max-h-36 overflow-auto">
+                <ul className="list-disc list-inside">
+                  {(selectedPlanet.name.toLowerCase() === 'earth' ? satelliteNames : ['Voyager 1', 'Voyager 2', 'Pioneer 10']).map((m, i) => (
+                    <li key={i} className="text-sm">{m}</li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
-          
-          <button 
-            onClick={() => setShowInfo(false)}
-            className="mt-6 w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-all transform hover:scale-105 shadow-lg"
-          >
-            Continue Exploring
-          </button>
+
+          <div className="mt-4 flex gap-2">
+            <button onClick={() => setShowInfo(false)} className="flex-1 bg-blue-600 hover:bg-blue-700 py-2 rounded-md font-bold">Close</button>
+            <button onClick={() => { setShowInfo(false); if ((window as any).enterEarthView) (window as any).enterEarthView(); }} className="flex-1 bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 py-2 rounded-md font-bold">View in Scene</button>
+          </div>
         </div>
       )}
 
